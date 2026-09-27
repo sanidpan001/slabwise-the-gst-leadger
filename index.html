@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SlabWise — GST Calculator | Add &amp; Remove GST with CGST/SGST/IGST Split</title>
+<meta name="description" content="SlabWise is a free GST calculator for India: add or remove GST, auto-split CGST/SGST vs IGST, reverse GST extraction, bulk invoice ledger mode, Indian lakh/crore formatting and amount-in-words.">
+<link rel="canonical" href="https://slabwise.example/">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: { extend: {
+    colors: { ivory:'#FFFBEB', deepgreen:'#14532D', gold:'#C9A227', golddeep:'#A8861C', ledgerline:'#E7DCC0' },
+    fontFamily: { serif:['Georgia','Times New Roman','serif'] }
+  }}
+};
+</script>
+<style>
+  body { background:#FFFBEB; }
+  .ledger-card { border:1px solid #E7DCC0; box-shadow:0 1px 0 #E7DCC0, 0 10px 30px -18px rgba(20,83,45,.35); }
+  .double-rule { border-top:3px double #C9A227; }
+  .num { font-variant-numeric: tabular-nums; }
+  .tab-active { background:#14532D; color:#FFFBEB; }
+  .tab-idle { background:transparent; color:#14532D; }
+  .slab-active { background:#14532D !important; color:#FFFBEB !important; border-color:#14532D !important; }
+  .mode-active { background:#C9A227 !important; color:#1a1a1a !important; border-color:#A8861C !important; font-weight:700; }
+  input:focus, textarea:focus, button:focus-visible { outline:2px solid #C9A227; outline-offset:2px; }
+  .fade-in { animation: fade .25s ease-in; }
+  @keyframes fade { from { opacity:.35 } to { opacity:1 } }
+  @media print { .no-print { display:none !important; } }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "SlabWise GST Calculator",
+  "applicationCategory": "FinanceApplication",
+  "operatingSystem": "Any",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "INR" },
+  "description": "Free GST calculator: add or remove GST at 0/3/5/18/40% slabs (GST 2.0), auto-split CGST/SGST or IGST, reverse GST, bulk ledger mode and Indian number formatting."
+}
+</script>
+</head>
+<body id="top" class="text-stone-900 antialiased">
+
+<!-- ===== Sticky header ===== -->
+<header class="no-print sticky top-0 z-40 bg-deepgreen text-ivory border-b-2 border-gold">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6 h-14 flex items-center justify-between">
+    <a href="#top" class="flex items-center gap-2.5">
+      <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gold text-deepgreen font-serif font-bold text-lg">₹</span>
+      <span class="font-serif text-xl tracking-wide">Slab<span class="text-gold">Wise</span></span>
+    </a>
+    <nav class="text-sm">
+      <a href="#top" class="hover:text-gold mr-5">Home</a>
+      <a href="https://fixoraa.tech" class="hover:text-gold">More Tools</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ===== TOP AD (verbatim) ===== -->
+<div class="no-print mx-auto max-w-6xl px-4 sm:px-6 pt-4" role="complementary" aria-label="Advertisement">
+  <div class="mx-auto text-center" style="max-width:728px">
+    <span class="block text-[10px] tracking-[0.18em] uppercase text-slate-400 mb-1.5">Advertisement</span>
+    <div class="flex justify-center overflow-hidden">
+      <div class="origin-top scale-[0.44] sm:scale-100 shrink-0">
+        <script>
+          atOptions = { 'key' : '4e68ac77881c17fe128a46565d9a4e8c', 'format' : 'iframe', 'height' : 90, 'width' : 728, 'params' : {} };
+        </script>
+        <script src="https://www.highrevenueformat.com/4e68ac77881c17fe128a46565d9a4e8c/invoke.js"></script>
+      </div>
+    </div>
+  </div>
+</div>
+
+<main class="mx-auto max-w-6xl px-4 sm:px-6 py-8">
+
+  <!-- ===== Hero ===== -->
+  <section class="text-center mb-8">
+    <p class="inline-block text-xs font-bold tracking-[0.22em] uppercase text-golddeep border border-gold rounded-full px-4 py-1.5 bg-white/60">Unlimited Free Usage · No Sign-up · No Paywall</p>
+    <h1 class="font-serif text-4xl sm:text-5xl text-deepgreen mt-5 mb-3">The GST Ledger</h1>
+    <p class="double-rule max-w-xl mx-auto pt-4 text-stone-600">Add or remove Goods &amp; Services Tax at every Indian slab, split it into CGST / SGST or IGST, or run a whole bill through the bulk ledger — all balanced to the last paise.</p>
+  </section>
+
+  <!-- ===== Tool card ===== -->
+  <section class="ledger-card rounded-xl bg-white/70 p-5 sm:p-8 mb-4" aria-label="GST calculator tool">
+    <!-- Tabs -->
+    <div class="flex flex-wrap gap-2 mb-6 no-print" role="tablist" aria-label="Calculator mode">
+      <button id="tab-single" role="tab" aria-selected="true" class="tab-active px-5 py-2.5 rounded-md text-sm font-semibold border border-deepgreen transition">Single Entry</button>
+      <button id="tab-bulk" role="tab" aria-selected="false" class="tab-idle px-5 py-2.5 rounded-md text-sm font-semibold border border-deepgreen transition">Bulk Ledger <span class="ml-1 text-[10px] uppercase tracking-wider opacity-80">paste many</span></button>
+    </div>
+
+    <!-- ============ SINGLE PANEL ============ -->
+    <div id="panel-single" role="tabpanel" class="fade-in">
+      <div class="grid gap-8 lg:grid-cols-2">
+        <!-- Inputs -->
+        <div>
+          <label for="amount" class="block text-sm font-semibold text-deepgreen mb-1.5">Amount (₹)</label>
+          <input id="amount" type="text" inputmode="decimal" placeholder="e.g. 10,000" autocomplete="off"
+                 class="num w-full text-2xl px-4 py-3 rounded-md border border-ledgerline bg-ivory focus:border-gold">
+
+          <div class="mt-5">
+            <span class="block text-sm font-semibold text-deepgreen mb-1.5">Direction</span>
+            <div class="grid grid-cols-2 gap-2" role="group" aria-label="GST direction">
+              <button id="mode-add" class="mode-active px-3 py-2.5 rounded-md text-sm border border-ledgerline bg-white">＋ Add GST <span class="block text-[11px] font-normal opacity-75">price excludes tax</span></button>
+              <button id="mode-remove" class="px-3 py-2.5 rounded-md text-sm border border-ledgerline bg-white">− Remove GST <span class="block text-[11px] font-normal opacity-75">price includes tax</span></button>
+            </div>
+          </div>
+
+          <div class="mt-5">
+            <span class="block text-sm font-semibold text-deepgreen mb-1.5">GST slab</span>
+            <div id="slabs" class="flex flex-wrap gap-2" role="group" aria-label="GST slab"></div>
+            <div class="mt-2 flex items-center gap-2 text-sm">
+              <label for="custom-rate" class="text-stone-500">Custom:</label>
+              <input id="custom-rate" type="number" min="0" max="100" step="0.01" placeholder="%"
+                     class="num w-24 px-2 py-1.5 rounded-md border border-ledgerline bg-ivory">
+              <span class="text-stone-400 text-xs">0–100%</span>
+            </div>
+          </div>
+
+          <div class="mt-5">
+            <span class="block text-sm font-semibold text-deepgreen mb-1.5">Supply type</span>
+            <div class="grid grid-cols-2 gap-2" role="group" aria-label="Supply type">
+              <button id="supply-intra" class="mode-active px-3 py-2.5 rounded-md text-sm border border-ledgerline bg-white">Intra-state <span class="block text-[11px] font-normal opacity-75">CGST + SGST</span></button>
+              <button id="supply-inter" class="px-3 py-2.5 rounded-md text-sm border border-ledgerline bg-white">Inter-state <span class="block text-[11px] font-normal opacity-75">IGST</span></button>
+            </div>
+          </div>
+
+          <p id="single-error" class="hidden mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2" role="alert"></p>
+        </div>
+
+        <!-- Ledger results -->
+        <div class="bg-deepgreen text-ivory rounded-lg p-5 sm:p-6 border-2 border-gold">
+          <h2 class="font-serif text-xl text-gold mb-1">Journal of Tax</h2>
+          <p class="text-[11px] uppercase tracking-[0.18em] text-ivory/60 mb-4">balanced ledger · paise exact</p>
+          <dl id="ledger" class="num text-[15px]">
+            <div class="flex justify-between py-2 border-b border-ivory/15"><dt class="text-ivory/75">Base amount</dt><dd id="r-base">₹0.00</dd></div>
+            <div class="flex justify-between py-2 border-b border-ivory/15"><dt class="text-ivory/75" id="lbl-gst">GST @ 18%</dt><dd id="r-gst">₹0.00</dd></div>
+            <div id="row-cgst" class="flex justify-between py-2 border-b border-ivory/15 pl-4"><dt class="text-ivory/60 text-sm">↳ CGST</dt><dd id="r-cgst" class="text-sm">₹0.00</dd></div>
+            <div id="row-sgst" class="flex justify-between py-2 border-b border-ivory/15 pl-4"><dt class="text-ivory/60 text-sm">↳ SGST</dt><dd id="r-sgst" class="text-sm">₹0.00</dd></div>
+            <div id="row-igst" class="hidden flex justify-between py-2 border-b border-ivory/15 pl-4"><dt class="text-ivory/60 text-sm">↳ IGST</dt><dd id="r-igst" class="text-sm">₹0.00</dd></div>
+            <div class="flex justify-between py-3"><dt class="font-serif text-lg text-gold">Total</dt><dd id="r-total" class="font-serif text-2xl text-gold">₹0.00</dd></div>
+          </dl>
+          <p class="mt-2 text-xs text-ivory/70 leading-relaxed"><span class="text-gold uppercase tracking-widest text-[10px] block mb-0.5">Amount in words</span><span id="r-words">Rupees Zero Only</span></p>
+          <div class="no-print mt-4 flex flex-wrap gap-2">
+            <button id="copy-single" class="px-4 py-2 rounded-md bg-gold text-deepgreen text-sm font-bold hover:brightness-105">Copy entry</button>
+            <button id="reset-single" class="px-4 py-2 rounded-md border border-ivory/30 text-sm hover:bg-ivory/10">Clear</button>
+          </div>
+          <p id="copy-note" class="hidden mt-2 text-xs text-gold" role="status">Copied to clipboard.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ BULK PANEL ============ -->
+    <div id="panel-bulk" role="tabpanel" class="hidden fade-in">
+      <div class="grid gap-8 lg:grid-cols-5">
+        <div class="lg:col-span-2">
+          <label for="bulk-input" class="block text-sm font-semibold text-deepgreen mb-1.5">Paste amounts <span class="font-normal text-stone-500">— one per line</span></label>
+          <textarea id="bulk-input" rows="9" spellcheck="false" placeholder="1000&#10;2500, 18&#10;₹4,200 @ 5%&#10;900 12"
+            class="num w-full px-4 py-3 rounded-md border border-ledgerline bg-ivory font-mono text-sm leading-6"></textarea>
+          <p class="mt-1.5 text-xs text-stone-500">Each line: <span class="font-mono">amount</span> optionally followed by its slab — e.g. <span class="font-mono">2500, 18</span> or <span class="font-mono">₹4,200 @ 5%</span>. Lines without a slab use the default below. Bad lines are flagged, not silently dropped.</p>
+
+          <div class="mt-4 grid grid-cols-2 gap-3">
+            <div>
+              <label for="bulk-slab" class="block text-xs font-semibold text-deepgreen mb-1">Default slab</label>
+              <select id="bulk-slab" class="num w-full px-2 py-2 rounded-md border border-ledgerline bg-ivory text-sm">
+                <option value="5">5%</option><option value="18" selected>18%</option>
+                <option value="40">40%</option>
+                <option value="3">3%</option><option value="0">0%</option>
+              </select>
+            </div>
+            <div>
+              <label for="bulk-mode" class="block text-xs font-semibold text-deepgreen mb-1">Amounts are</label>
+              <select id="bulk-mode" class="w-full px-2 py-2 rounded-md border border-ledgerline bg-ivory text-sm">
+                <option value="add">Excluding GST</option>
+                <option value="remove">Including GST</option>
+              </select>
+            </div>
+          </div>
+          <div class="mt-3">
+            <label for="bulk-supply" class="block text-xs font-semibold text-deepgreen mb-1">Supply type</label>
+            <select id="bulk-supply" class="w-full px-2 py-2 rounded-md border border-ledgerline bg-ivory text-sm">
+              <option value="intra">Intra-state (CGST + SGST)</option>
+              <option value="inter">Inter-state (IGST)</option>
+            </select>
+          </div>
+          <div class="no-print mt-4 flex flex-wrap gap-2">
+            <button id="copy-bulk" class="px-4 py-2 rounded-md bg-deepgreen text-ivory text-sm font-bold hover:brightness-110">Copy table</button>
+            <button id="clear-bulk" class="px-4 py-2 rounded-md border border-ledgerline text-sm">Clear</button>
+          </div>
+          <p id="bulk-copy-note" class="hidden mt-2 text-xs text-deepgreen" role="status">Table copied to clipboard.</p>
+        </div>
+
+        <div class="lg:col-span-3">
+          <h2 class="font-serif text-xl text-deepgreen mb-3">Bulk ledger <span id="bulk-count" class="num text-sm text-stone-500 font-sans"></span></h2>
+          <div class="overflow-x-auto rounded-lg border border-ledgerline">
+            <table class="w-full text-sm num min-w-[560px]">
+              <thead>
+                <tr class="bg-deepgreen text-ivory text-left">
+                  <th class="px-3 py-2 font-semibold">#</th>
+                  <th class="px-3 py-2 font-semibold">Entered</th>
+                  <th class="px-3 py-2 font-semibold">Slab</th>
+                  <th class="px-3 py-2 font-semibold text-right">Base</th>
+                  <th class="px-3 py-2 font-semibold text-right">GST</th>
+                  <th class="px-3 py-2 font-semibold text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody id="bulk-rows"></tbody>
+              <tfoot id="bulk-foot"></tfoot>
+            </table>
+          </div>
+          <p id="bulk-flag" class="hidden mt-2 text-xs text-red-700" role="alert"></p>
+          <div id="bulk-totals" class="mt-4 bg-deepgreen text-ivory rounded-lg p-4 border-2 border-gold num text-sm hidden">
+            <div class="flex justify-between py-1"><span class="text-ivory/70">Total base</span><span id="bt-base"></span></div>
+            <div class="flex justify-between py-1"><span class="text-ivory/70">Total GST</span><span id="bt-gst"></span></div>
+            <div class="flex justify-between py-1 font-serif text-lg text-gold border-t border-gold/40 mt-1 pt-2"><span>Grand total</span><span id="bt-total"></span></div>
+            <p class="mt-1 text-xs text-ivory/70"><span id="bt-words"></span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ============ SlabWise core logic (pure, testable) ============ */
+const SLABS = [0, 3, 5, 18, 40];
+
+function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
+
+function fmtIN(n){
+  const v = Number(n);
+  if (!isFinite(v)) return '₹0.00';
+  return '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function validRate(r){
+  return typeof r === 'number' && isFinite(r) && r >= 0 && r <= 100;
+}
+
+/* calcGST({amount, rate, mode:'add'|'remove', supply:'intra'|'inter'})
+   add:    amount is base; gst added on top.
+   remove: amount is GST-inclusive total; reverse GST extraction.
+   Returns {base, gst, cgst, sgst, igst, total} rounded to paise, or null on bad input. */
+function calcGST(o){
+  const amount = Number(o && o.amount);
+  const rate = Number(o && o.rate);
+  const mode = (o && o.mode) || 'add';
+  const supply = (o && o.supply) || 'intra';
+  if (!isFinite(amount) || amount < 0 || !validRate(rate)) return null;
+  if (mode !== 'add' && mode !== 'remove') return null;
+
+  let base, gst, total;
+  if (mode === 'add'){
+    base = round2(amount);
+    gst = round2(base * rate / 100);
+    total = round2(base + gst);
+  } else {
+    total = round2(amount);
+    base = round2(total / (1 + rate / 100));
+    gst = round2(total - base);           /* keeps base + gst === total exactly */
+  }
+  let cgst = 0, sgst = 0, igst = 0;
+  if (supply === 'inter'){
+    igst = gst;
+  } else {
+    cgst = round2(gst / 2);
+    sgst = round2(gst - cgst);             /* rounding dust lands here, sum stays exact */
+  }
+  return { base, gst, cgst, sgst, igst, total };
+}
+
+/* Parse one bulk line. Accepted: "1000" | "1000 18" | "1000, 18" | "1000:18" |
+   "₹1,000 @ 18%" | "1000 @18". Returns {amount, rate} or null. */
+function parseBulkLine(line, defaultRate){
+  if (typeof line !== 'string') return null;
+  let s = line.trim().replace(/[₹Rs.\s]+/gi, ' ').replace(/,/g, '');
+  /* keep digits, dots, %, @, :, - */
+  const nums = s.match(/-?\d+(?:\.\d+)?/g);
+  if (!nums || nums.length === 0) return null;
+  const amount = Number(nums[0]);
+  if (!isFinite(amount) || amount < 0) return null;
+  let rate = defaultRate;
+  if (nums.length >= 2){
+    rate = Number(nums[1]);
+    if (!validRate(rate)) return null;
+  }
+  if (!validRate(rate)) return null;
+  return { amount, rate };
+}
+
+/* bulkCalc(text, {defaultRate, mode, supply}) -> {rows:[{line, amount, rate, calc} or {line, error}], totals:{base, gst, total}, valid, flagged} */
+function bulkCalc(text, opts){
+  const o = opts || {};
+  const lines = String(text || '').split(/\r?\n/);
+  const rows = [];
+  const totals = { base: 0, gst: 0, total: 0 };
+  let flagged = 0;
+  lines.forEach((ln, i) => {
+    if (ln.trim() === '') return;
+    const parsed = parseBulkLine(ln, o.defaultRate == null ? 18 : o.defaultRate);
+    if (!parsed){
+      rows.push({ line: i + 1, raw: ln.trim(), error: true });
+      flagged++;
+      return;
+    }
+    const calc = calcGST({ amount: parsed.amount, rate: parsed.rate, mode: o.mode || 'add', supply: o.supply || 'intra' });
+    if (!calc){ rows.push({ line: i + 1, raw: ln.trim(), error: true }); flagged++; return; }
+    rows.push({ line: i + 1, raw: ln.trim(), amount: parsed.amount, rate: parsed.rate, calc });
+    totals.base = round2(totals.base + calc.base);
+    totals.gst = round2(totals.gst + calc.gst);
+    totals.total = round2(totals.total + calc.total);
+  });
+  return { rows, totals, valid: rows.length - flagged, flagged };
+}
+
+/* Indian-system number to words (crore / lakh / thousand / hundred), paise aware. */
+function numberToWordsINR(n){
+  const v = Number(n);
+  if (!isFinite(v) || v < 0) return 'Rupees Zero Only';
+  const ones = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  const tens = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  function two(d){ return d < 20 ? ones[d] : tens[Math.floor(d/10)] + (d%10 ? ' ' + ones[d%10] : ''); }
+  function three(d){
+    const h = Math.floor(d/100), r = d%100;
+    return (h ? ones[h] + ' Hundred' + (r ? ' ' : '') : '') + (r ? two(r) : '');
+  }
+  const rupees = Math.floor(v);
+  const paise = Math.round((v - rupees) * 100);
+  let out;
+  if (rupees === 0){ out = 'Zero'; }
+  else {
+    const parts = [];
+    const cr = Math.floor(rupees / 1e7); let rem = rupees % 1e7;
+    const lk = Math.floor(rem / 1e5); rem = rem % 1e5;
+    const th = Math.floor(rem / 1e3); rem = rem % 1e3;
+    if (cr) parts.push(three(cr) + ' Crore');
+    if (lk) parts.push(two(lk) + ' Lakh');
+    if (th) parts.push(two(th) + ' Thousand');
+    if (rem) parts.push(three(rem));
+    out = parts.join(' ');
+  }
+  let res = 'Rupees ' + out;
+  if (paise) res += ' and Paise ' + two(paise);
+  return res + ' Only';
+}
+
+function copyText(t){
+  if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t);
+  const ta = document.createElement('textarea');
+  ta.value = t; document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch(e){}
+  document.body.removeChild(ta);
+  return Promise.resolve();
+}
+
+/* ============ Page wiring ============ */
+(function(){
+  const $ = id => document.getElementById(id);
+  const state = { mode:'add', supply:'intra', rate:18 };
+
+  /* --- tabs --- */
+  const tabS = $('tab-single'), tabB = $('tab-bulk'), panS = $('panel-single'), panB = $('panel-bulk');
+  function show(which){
+    const s = which === 'single';
+    panS.classList.toggle('hidden', !s); panB.classList.toggle('hidden', s);
+    tabS.classList.toggle('tab-active', s); tabS.classList.toggle('tab-idle', !s);
+    tabS.setAttribute('aria-selected', s); tabB.setAttribute('aria-selected', !s);
+    tabB.classList.toggle('tab-active', !s); tabB.classList.toggle('tab-idle', s);
+  }
+  tabS.addEventListener('click', () => show('single'));
+  tabB.addEventListener('click', () => show('bulk'));
+
+  /* --- slab buttons --- */
+  const slabBox = $('slabs');
+  SLABS.forEach(r => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = r + '%'; b.dataset.rate = r;
+    b.className = 'num px-4 py-2 rounded-md text-sm border border-ledgerline bg-white hover:border-gold transition' + (r === 18 ? ' slab-active' : '');
+    b.setAttribute('aria-pressed', r === 18 ? 'true' : 'false');
+    b.addEventListener('click', () => {
+      state.rate = r; $('custom-rate').value = '';
+      slabBox.querySelectorAll('button').forEach(x => { x.classList.remove('slab-active'); x.setAttribute('aria-pressed','false'); });
+      b.classList.add('slab-active'); b.setAttribute('aria-pressed','true');
+      render();
+    });
+    slabBox.appendChild(b);
+  });
+  $('custom-rate').addEventListener('input', e => {
+    const v = Number(e.target.value);
+    if (e.target.value !== '' && validRate(v)){
+      state.rate = v;
+      slabBox.querySelectorAll('button').forEach(x => { x.classList.remove('slab-active'); x.setAttribute('aria-pressed','false'); });
+    }
+    render();
+  });
+
+  /* --- mode & supply toggles (single) --- */
+  function setMode(m){
+    state.mode = m;
+    $('mode-add').classList.toggle('mode-active', m === 'add');
+    $('mode-remove').classList.toggle('mode-active', m === 'remove');
+    render();
+  }
+  function setSupply(s){
+    state.supply = s;
+    $('supply-intra').classList.toggle('mode-active', s === 'intra');
+    $('supply-inter').classList.toggle('mode-active', s === 'inter');
+    render();
+  }
+  $('mode-add').addEventListener('click', () => setMode('add'));
+  $('mode-remove').addEventListener('click', () => setMode('remove'));
+  $('supply-intra').addEventListener('click', () => setSupply('intra'));
+  $('supply-inter').addEventListener('click', () => setSupply('inter'));
+
+  /* --- single render --- */
+  function parseAmount(str){
+    if (typeof str !== 'string') return NaN;
+    const cleaned = str.replace(/[₹,\s]/g, '');
+    if (cleaned === '') return NaN;
+    return Number(cleaned);
+  }
+  function render(){
+    const err = $('single-error');
+    const amt = parseAmount($('amount').value);
+    if ($('amount').value.trim() !== '' && (!isFinite(amt) || amt < 0)){
+      err.textContent = 'Please enter a valid non-negative amount (digits only, e.g. 10000).';
+      err.classList.remove('hidden');
+      return;
+    }
+    err.classList.add('hidden');
+    const base = isFinite(amt) ? amt : 0;
+    const r = calcGST({ amount: base, rate: state.rate, mode: state.mode, supply: state.supply });
+    if (!r) return;
+    $('lbl-gst').textContent = 'GST @ ' + state.rate + '%' + (state.mode === 'remove' ? ' (extracted)' : '');
+    $('r-base').textContent = fmtIN(r.base);
+    $('r-gst').textContent = fmtIN(r.gst);
+    $('r-cgst').textContent = fmtIN(r.cgst);
+    $('r-sgst').textContent = fmtIN(r.sgst);
+    $('r-igst').textContent = fmtIN(r.igst);
+    $('r-total').textContent = fmtIN(r.total);
+    $('r-words').textContent = numberToWordsINR(r.total);
+    const inter = state.supply === 'inter';
+    $('row-cgst').classList.toggle('hidden', inter);
+    $('row-sgst').classList.toggle('hidden', inter);
+    $('row-igst').classList.toggle('hidden', !inter);
+    $('row-igst').classList.toggle('flex', !inter);
+  }
+  $('amount').addEventListener('input', render);
+
+  $('reset-single').addEventListener('click', () => {
+    $('amount').value = ''; $('custom-rate').value = '';
+    setMode('add'); setSupply('intra');
+    state.rate = 18;
+    slabBox.querySelectorAll('button').forEach(x => {
+      const on = Number(x.dataset.rate) === 18;
+      x.classList.toggle('slab-active', on); x.setAttribute('aria-pressed', on ? 'true':'false');
+    });
+    render();
+  });
+
+  $('copy-single').addEventListener('click', () => {
+    const amt = parseAmount($('amount').value);
+    const base = isFinite(amt) ? amt : 0;
+    const r = calcGST({ amount: base, rate: state.rate, mode: state.mode, supply: state.supply });
+    const split = state.supply === 'inter' ? 'IGST ' + fmtIN(r.igst) : 'CGST ' + fmtIN(r.cgst) + ' + SGST ' + fmtIN(r.sgst);
+    copyText('SlabWise GST entry\nMode: ' + (state.mode === 'add' ? 'Add GST' : 'Remove GST (reverse)') +
+      ' @ ' + state.rate + '% | ' + (state.supply === 'inter' ? 'Inter-state' : 'Intra-state') +
+      '\nBase: ' + fmtIN(r.base) + '\nGST: ' + fmtIN(r.gst) + ' (' + split + ')' +
+      '\nTotal: ' + fmtIN(r.total) + '\nIn words: ' + numberToWordsINR(r.total));
+    const n = $('copy-note'); n.classList.remove('hidden');
+    setTimeout(() => n.classList.add('hidden'), 2000);
+  });
+
+  /* --- bulk render --- */
+  function renderBulk(){
+    const text = $('bulk-input').value;
+    const res = bulkCalc(text, {
+      defaultRate: Number($('bulk-slab').value),
+      mode: $('bulk-mode').value,
+      supply: $('bulk-supply').value
+    });
+    const tb = $('bulk-rows'); tb.innerHTML = '';
+    res.rows.forEach(row => {
+      const tr = document.createElement('tr');
+      tr.className = 'border-b border-ledgerline ' + (row.error ? 'bg-red-50' : (row.line % 2 ? 'bg-white/60' : ''));
+      if (row.error){
+        tr.innerHTML = '<td class="px-3 py-2 text-stone-400">' + row.line + '</td>' +
+          '<td class="px-3 py-2 font-mono text-xs text-red-700" colspan="4">⚠ Could not read: “' + row.raw.replace(/</g,'&lt;') + '”</td>' +
+          '<td class="px-3 py-2 text-right text-stone-400">—</td>';
+      } else {
+        tr.innerHTML = '<td class="px-3 py-2 text-stone-400">' + row.line + '</td>' +
+          '<td class="px-3 py-2">' + fmtIN(row.amount) + '</td>' +
+          '<td class="px-3 py-2">' + row.rate + '%</td>' +
+          '<td class="px-3 py-2 text-right">' + fmtIN(row.calc.base) + '</td>' +
+          '<td class="px-3 py-2 text-right text-deepgreen font-semibold">' + fmtIN(row.calc.gst) + '</td>' +
+          '<td class="px-3 py-2 text-right font-semibold">' + fmtIN(row.calc.total) + '</td>';
+      }
+      tb.appendChild(tr);
+    });
+    $('bulk-count').textContent = res.rows.length ? '(' + res.valid + ' valid' + (res.flagged ? ', ' + res.flagged + ' flagged' : '') + ')' : '';
+    const flag = $('bulk-flag');
+    if (res.flagged){
+      flag.textContent = res.flagged + ' line' + (res.flagged > 1 ? 's' : '') + ' could not be parsed and were excluded from totals. Fix them or leave them out.';
+      flag.classList.remove('hidden');
+    } else flag.classList.add('hidden');
+    const has = res.valid > 0;
+    $('bulk-totals').classList.toggle('hidden', !has);
+    if (has){
+      $('bt-base').textContent = fmtIN(res.totals.base);
+      $('bt-gst').textContent = fmtIN(res.totals.gst);
+      $('bt-total').textContent = fmtIN(res.totals.total);
+      $('bt-words').textContent = numberToWordsINR(res.totals.total);
+    }
+  }
+  ['bulk-input','bulk-slab','bulk-mode','bulk-supply'].forEach(id => $(id).addEventListener('input', renderBulk));
+  $('clear-bulk').addEventListener('click', () => { $('bulk-input').value = ''; renderBulk(); });
+  $('copy-bulk').addEventListener('click', () => {
+    const res = bulkCalc($('bulk-input').value, {
+      defaultRate: Number($('bulk-slab').value), mode: $('bulk-mode').value, supply: $('bulk-supply').value
+    });
+    const lines = ['SlabWise bulk ledger (' + $('bulk-mode').selectedOptions[0].text + ', ' + $('bulk-supply').selectedOptions[0].text + ')'];
+    res.rows.forEach(r => {
+      lines.push(r.error ? '#'+r.line+' INVALID: '+r.raw
+        : '#'+r.line+' '+fmtIN(r.amount)+' @'+r.rate+'% -> base '+fmtIN(r.calc.base)+', GST '+fmtIN(r.calc.gst)+', total '+fmtIN(r.calc.total));
+    });
+    lines.push('TOTALS — base '+fmtIN(res.totals.base)+', GST '+fmtIN(res.totals.gst)+', total '+fmtIN(res.totals.total));
+    copyText(lines.join('\n'));
+    const n = $('bulk-copy-note'); n.classList.remove('hidden');
+    setTimeout(() => n.classList.add('hidden'), 2000);
+  });
+
+  render(); renderBulk();
+})();
+</script>
+
+<!-- ===== BOTTOM AD (verbatim) ===== -->
+<div class="no-print mx-auto max-w-6xl px-4 sm:px-6 pb-4" role="complementary" aria-label="Advertisement">
+  <div class="mx-auto text-center" style="max-width:728px">
+    <span class="block text-[10px] tracking-[0.18em] uppercase text-slate-400 mb-1.5">Advertisement</span>
+    <div class="flex justify-center overflow-hidden">
+      <script async src="https://js.wpadmngr.com/static/adManager.js" data-admpid="464498"></script>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SEO article ===== -->
+<article id="seo-article" class="mx-auto max-w-3xl px-4 sm:px-6 pb-4 text-stone-700 leading-7">
+  <h2 class="font-serif text-3xl text-deepgreen mb-4 mt-8">GST Calculator India: Add or Remove GST, Split CGST/SGST/IGST, and Total Whole Bills</h2>
+
+  <p>A GST calculator answers one deceptively simple question: how much of a price is tax, and how much is the real value of the goods or services? In India, where Goods and Services Tax applies to almost every commercial transaction, that question comes up constantly — on invoices, in price quotes, on marketplace listings, and in monthly bookkeeping. SlabWise performs the calculation instantly and shows the full ledger: base amount, GST, the CGST/SGST or IGST split, the total, the total written out in words, and — in bulk mode — a whole list of amounts totalled row by row.</p>
+
+  <h3 class="font-serif text-2xl text-deepgreen mt-8 mb-3">What GST is and why the calculation matters</h3>
+  <p>Goods and Services Tax is a destination-based indirect tax levied on the supply of goods and services across India. It replaced a tangle of earlier levies — excise duty, service tax, VAT, octroi — with a single tax collected in stages but ultimately borne by the final consumer. Businesses registered under GST collect it from customers and pass it to the government, usually offsetting the tax they themselves paid on purchases through input tax credit.</p>
+  <p>Getting the arithmetic right matters for three practical reasons. First, invoices must show the taxable value and the tax components correctly; wrong figures invite scrutiny during audits. Second, input tax credit claims depend on the tax amounts matching between supplier and buyer filings. Third, and most commonly, everyday pricing decisions — "should this quote include tax or show it separately?" — require converting between tax-exclusive and tax-inclusive amounts several times a day. A reliable calculator removes the guesswork and the rounding errors that creep in when the maths is done on a phone keypad.</p>
+
+  <h3 class="font-serif text-2xl text-deepgreen mt-8 mb-3">The Indian GST slabs under GST 2.0: 0%, 3%, 5%, 18%, 40%</h3>
+  <p>Since 22 September 2025, India follows GST 2.0: the old 12% and 28% slabs were abolished and most goods and services were re-sorted into just two main rates — 5% and 18% — plus a 40% demerit rate for luxury and sin goods. Five percent covers essentials and merit goods — packaged food items, medicines, soaps and shampoos, economy travel, small restaurants and bicycles. Eighteen percent is the standard rate for most goods and services — electronics, IT and telecom, restaurants, small cars, cement and household appliances. Forty percent applies to luxury and demerit goods such as large cars and SUVs, tobacco products, pan masala and aerated drinks. Zero percent covers exempt and nil-rated essentials such as UHT milk, paneer, chapati, exercise books and life-saving drugs, while 3% applies mainly to gold and jewellery.</p>
+  <p>SlabWise presets these rates as one-tap buttons and also accepts any custom percentage, which is useful for rates like 0.1% or 0.25% on special categories, or for working in other countries' VAT/GST systems where the rate differs. When entering a rate manually, remember that the calculator applies the percentage to the taxable value — the price before tax in "add" mode — and never to the already-taxed total.</p>
+
+  <h3 class="font-serif text-2xl text-deepgreen mt-8 mb-3">Add GST vs remove GST: the two directions</h3>
+  <p>Every GST calculation runs in one of two directions. In "add GST" mode, you start with the price before tax and compute the tax on top. The formula is straightforward: GST amount equals the base price multiplied by the rate and divided by 100, and the invoice total is the base plus the GST. For example, a service billed at ₹10,000 before tax at 18% produces GST of ₹1,800 and an invoice total of ₹11,800. This is the mode used for most business-to-business quotes, where prices are conventionally stated exclusive of tax.</p>
+  <p>In "remove GST" mode — also called reverse GST — you start with a price that already includes the tax and work backwards to find the base value and the tax embedded inside it. Retail prices, MRPs and many service quotes are stated inclusive of GST, so this direction is the one consumers and small businesses reach for most. The formula divides rather than subtracts: base price equals the inclusive total divided by one plus the rate expressed as a decimal. A product sold at ₹1,180 inclusive of 18% GST has a base price of ₹1,000 (1,180 ÷ 1.18) and contains ₹180 of GST.</p>
+  <p>The classic mistake here is subtracting the rate from the total — taking 18% off ₹1,180 to get ₹967.60, which is wrong because the 18% was charged on the base price, not on the total. Always divide first, then subtract. SlabWise's remove mode applies the divide-first formula automatically and shows both the extracted base and the tax so you can verify the relationship: base plus GST always equals the total you entered, balanced to the paise.</p>
+
+  <h3 class="font-serif text-2xl text-deepgreen mt-8 mb-3">CGST, SGST and IGST: how the tax splits</h3>
+  <p>India's GST is a dual tax. On an intra-state supply — buyer and seller in the same state — the total GST divides equally into Central GST (CGST), which goes to the central government, and State GST (SGST), which goes to the state government. At an 18% rate, each half is 9%: on a ₹10,000 base, that is ₹900 CGST plus ₹900 SGST, totalling ₹1,800 of tax. On an inter-state supply — seller and buyer in different states — the whole tax is charged as Integrated GST (IGST) at the full rate, so the same ₹10,000 base carries ₹1,800 of IGST with no CGST/SGST split.</p>
+  <p>SlabWise asks for the supply type and performs this split automatically. For intra-state it shows both halves; for inter-state it shows the single IGST figure. A subtle detail handled behind the scenes: when the GST amount has an odd number of paise, the two halves cannot always be identical to the decimal. The calculator assigns the rounded half to CGST and the remainder to SGST, so the displayed halves always add up exactly to the total GST — no phantom paise.</p>
+
+  <h3 class="font-serif text-2xl text-deepgreen mt-8 mb-3">Reverse GST in practice</h3>
+  <p>Reverse GST comes up whenever you need to strip the tax out of a quoted figure. Common cases include checking a supplier's invoice against your purchase order, converting an MRP into the taxable value for your books, preparing a quotation that must show the base and tax separately, and reconciling marketplace payouts that arrive tax-inclusive. The steps are always the same: take the inclusive total, divide by one plus the rate, and the result is the base; the difference between the total and the base is the tax.</p>
+  <p>Consider a consultant who charges ₹50,000 inclusive of 18% GST. Dividing by 1.18 gives a base fee of ₹42,372.88 and a GST component of ₹7,627.12. For an intra-state engagement that tax splits into ₹3,813.56 CGST and ₹3,813.56 SGST. Notice how taking "18% of the total" would have wrongly suggested ₹9,000 of tax — an error of nearly ₹1,373. When large invoices are involved, the divide-first discipline saves real money and real arguments with accountants.</p>
+
+  <h3 class="font-serif text-2xl text-deepgreen mt-8 mb-3">Bulk ledger: totalling many amounts at once</h3>
+  <p>Single calculations cover quotes and invoices, but bookkeeping often means dozens of amounts at once — a day's sales, a supplier statement, a stack of receipts. SlabWise's bulk ledger mode accepts a pasted list, one amount per line, and returns a table with the base, GST and total for every row plus column totals at the foot. Each line can carry its own slab, so mixed-rate bills work naturally: type "2500, 18" or "₹4,200 @ 5%" and each row is computed at its stated rate; lines without a rate inherit the default slab you choose. The bulk amounts can be treated as tax-exclusive or tax-inclusive, and the supply type applies across the table.</p>
+  <p>This is genuinely useful for quick reconciliations: paste the day's receipts, scan the per-row GST column, and compare the column total against your accounting software or a GSTR filing draft. Lines the parser cannot read are flagged in red and excluded from the totals rather than silently misread, and the whole table can be copied to the clipboard as plain text for pasting into a spreadsheet or billing tool.</p>
+
+  <h3 class="font-serif text-2xl text-deepgreen mt-8 mb-3">Indian number formatting and amounts in words</h3>
+  <p>Large Indian figures are grouped differently from international convention: after the first three digits, grouping happens in pairs — ₹1,00,000 for one lakh and ₹1,00,00,000 for one crore, rather than 100,000 and 10,000,000. SlabWise formats every figure with Indian digit grouping automatically, so one lakh reads as ₹1,00,000.00 and ten crores as ₹10,00,00,000.00. Misreading grouped figures is a classic source of invoice errors — a missing comma pair can turn a lakh into ten lakhs — so the calculator removes that ambiguity.</p>
+  <p>The ledger also writes the total out in words using the Indian numbering system: "Rupees One Lakh Eighteen Thousand Only". Amounts in words appear on cheques and formal invoices precisely because they are harder to tamper with than digits, and including them gives you a ready line for documentation. Paise are rendered too, as "and Paise Forty-Five" where applicable.</p>
+
+  <h3 class="font-serif text-2xl text-deepgreen mt-8 mb-3">Worked examples</h3>
+  <p><strong>Example 1 — Add GST, intra-state.</strong> A retailer sells goods worth ₹25,000 before tax at 18% within the same state. GST is ₹4,500, split into ₹2,250 CGST and ₹2,250 SGST. Invoice total: ₹29,500. In words: Rupees Twenty-Nine Thousand Five Hundred Only.</p>
+  <p><strong>Example 2 — Remove GST, inter-state.</strong> A freelancer receives ₹59,000 inclusive of 18% GST from a client in another state. Base value: ₹50,000 (59,000 ÷ 1.18). GST extracted: ₹9,000, charged entirely as IGST. Had she quoted the 18% on the total instead, she would have overstated the tax by ₹1,620.</p>
+  <p><strong>Example 3 — Bulk ledger.</strong> A shopkeeper pastes five lines: "1200", "3400, 40", "₹890 @ 5%", "5600, 18", "200". With an 18% default slab, tax-exclusive mode and intra-state supply, the ledger computes each row — the ₹890 line at 5% contributing just ₹44.50 of GST, while the ₹3,400 line at 40% adds ₹1,360 — and totals the columns: base ₹11,290, GST ₹2,664.50, grand total ₹13,954.50.</p>
+
+  <h3 class="font-serif text-2xl text-deepgreen mt-8 mb-3">Common mistakes to avoid</h3>
+  <p>Beyond the subtract-instead-of-divide error, three mistakes recur. First, applying GST to a price that already includes it — double taxation in miniature — which happens when teams lose track of whether a quote was inclusive or exclusive. Second, using the wrong supply type: charging CGST/SGST on an inter-state sale, or IGST within a state, misstates the invoice even though the total tax figure is identical. Third, rounding each line of a long invoice independently and then summing, which can drift by a few paise from rounding the column total; SlabWise rounds each row to the paise and sums the rounded values, matching how ledger software typically behaves.</p>
+  <p>Finally, remember what a calculator cannot decide for you: the correct slab for a product or service is a classification question, not an arithmetic one. If you are unsure whether an item attracts 5%, 18% or 40%, check the current GST rate schedule or ask your tax adviser — the maths is only as right as the rate you feed it.</p>
+</article>
+
+<!-- ===== FAQs ===== -->
+<section class="mx-auto max-w-3xl px-4 sm:px-6 pb-10" aria-label="Frequently asked questions">
+  <h2 class="font-serif text-3xl text-deepgreen mb-6 mt-6">GST questions, answered</h2>
+  <div class="space-y-3">
+    <details class="ledger-card rounded-lg bg-white/70 px-5 py-4">
+      <summary class="font-semibold text-deepgreen cursor-pointer">How do I add GST to a price?</summary>
+      <p class="mt-2 text-stone-600 text-sm leading-6">Multiply the price before tax by the GST rate and divide by 100, then add the result to the price. For ₹10,000 at 18%, the GST is ₹1,800 and the total is ₹11,800. In SlabWise, choose "Add GST", enter the amount, pick the slab, and the base, tax, split and total appear instantly.</p>
+    </details>
+    <details class="ledger-card rounded-lg bg-white/70 px-5 py-4">
+      <summary class="font-semibold text-deepgreen cursor-pointer">How do I remove GST from a tax-inclusive price?</summary>
+      <p class="mt-2 text-stone-600 text-sm leading-6">Divide the inclusive total by 1 plus the rate as a decimal — for 18%, divide by 1.18. That gives the base price; subtract it from the total to get the GST. Never just subtract the rate percentage from the total, because the tax was charged on the base, not on the total. SlabWise's "Remove GST" mode does this reverse calculation for you.</p>
+    </details>
+    <details class="ledger-card rounded-lg bg-white/70 px-5 py-4">
+      <summary class="font-semibold text-deepgreen cursor-pointer">When do I use CGST/SGST and when IGST?</summary>
+      <p class="mt-2 text-stone-600 text-sm leading-6">Use CGST + SGST for intra-state supplies, where the seller and buyer are in the same state — the tax splits equally between the two. Use IGST for inter-state supplies, where they are in different states — the full tax is charged as one IGST figure. The total tax amount is the same either way; only the split differs.</p>
+    </details>
+    <details class="ledger-card rounded-lg bg-white/70 px-5 py-4">
+      <summary class="font-semibold text-deepgreen cursor-pointer">What are the GST slab rates in India?</summary>
+      <p class="mt-2 text-stone-600 text-sm leading-6">Since GST 2.0 (effective 22 September 2025), India's slabs are 0%, 5%, 18% and 40%, with 3% applying mainly to gold and jewellery and small special rates (0.1%, 0.25%) for certain categories. The old 12% and 28% slabs were abolished. Five percent covers essentials, 18% is the standard rate for most goods and services, and 40% applies to luxury and sin goods. SlabWise includes all of these as presets plus a custom-rate field.</p>
+    </details>
+    <details class="ledger-card rounded-lg bg-white/70 px-5 py-4">
+      <summary class="font-semibold text-deepgreen cursor-pointer">Can I calculate GST for many amounts at once?</summary>
+      <p class="mt-2 text-stone-600 text-sm leading-6">Yes. Switch to the Bulk Ledger tab and paste one amount per line. Each line can include its own slab (for example "2500, 18" or "₹4,200 @ 5%"), and you get a per-row table of base, GST and total with column totals at the bottom. Unreadable lines are flagged and excluded from the totals, and the table can be copied for your records.</p>
+    </details>
+    <details class="ledger-card rounded-lg bg-white/70 px-5 py-4">
+      <summary class="font-semibold text-deepgreen cursor-pointer">Why does SlabWise show amounts like ₹1,00,000 instead of ₹100,000?</summary>
+      <p class="mt-2 text-stone-600 text-sm leading-6">That is Indian digit grouping: after the first three digits, figures group in twos, so one lakh is written ₹1,00,000 and one crore ₹1,00,00,000. It is the standard convention on Indian invoices and cheques. SlabWise also writes totals out in words — "Rupees One Lakh Only" — matching formal documentation practice.</p>
+    </details>
+  </div>
+</section>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "How do I add GST to a price?", "acceptedAnswer": { "@type": "Answer", "text": "Multiply the price before tax by the GST rate and divide by 100, then add the result to the price. For ₹10,000 at 18%, the GST is ₹1,800 and the total is ₹11,800." } },
+    { "@type": "Question", "name": "How do I remove GST from a tax-inclusive price?", "acceptedAnswer": { "@type": "Answer", "text": "Divide the inclusive total by 1 plus the rate as a decimal — for 18%, divide by 1.18 — to get the base price, then subtract it from the total to get the GST. Never just subtract the rate percentage from the total." } },
+    { "@type": "Question", "name": "When do I use CGST/SGST and when IGST?", "acceptedAnswer": { "@type": "Answer", "text": "Use CGST + SGST for intra-state supplies (seller and buyer in the same state), splitting the tax equally. Use IGST for inter-state supplies, charging the full tax as one IGST figure." } },
+    { "@type": "Question", "name": "What are the GST slab rates in India?", "acceptedAnswer": { "@type": "Answer", "text": "Under GST 2.0 (from 22 September 2025) the slabs are 0%, 5%, 18% and 40%, with 3% mainly for gold and jewellery. The old 12% and 28% slabs were abolished. 5% covers essentials, 18% is the standard rate, and 40% applies to luxury and sin goods." } },
+    { "@type": "Question", "name": "Can I calculate GST for many amounts at once?", "acceptedAnswer": { "@type": "Answer", "text": "Yes — the Bulk Ledger tab accepts one amount per line, each optionally with its own slab, and returns a per-row table of base, GST and total with column totals." } },
+    { "@type": "Question", "name": "Why does SlabWise show amounts like ₹1,00,000 instead of ₹100,000?", "acceptedAnswer": { "@type": "Answer", "text": "That is Indian digit grouping: after the first three digits, figures group in twos, so one lakh is ₹1,00,000 and one crore is ₹1,00,00,000. SlabWise also writes totals out in words." } }
+  ]
+}
+</script>
+
+<footer class="no-print border-t-2 border-gold bg-deepgreen text-ivory/70">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm">
+    <p class="font-serif text-ivory">Slab<span class="text-gold">Wise</span> <span class="font-sans text-ivory/60">— balanced GST arithmetic</span></p>
+    <nav><a href="#top" class="hover:text-gold mr-5">Home</a><a href="https://fixoraa.tech" class="hover:text-gold">More Tools</a></nav>
+  </div>
+</footer>
+</body>
+</html>
